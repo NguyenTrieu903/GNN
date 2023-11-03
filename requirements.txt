@@ -1,3 +1,2 @@
 torch_geometric
-collections==0.1.6
 matplotlib==3.5.2
