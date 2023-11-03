@@ -1,5 +1,4 @@
 torch_geometric
-stellargraph==1.2.1
 collections
 matplotlib
 PIL
