@@ -114,7 +114,7 @@ if app_mode == 'PubMed':
     col1.write(f'Graph has isolated nodes: {dataset.has_isolated_nodes()}')
     col1.write(f'Graph has loops: {dataset.has_self_loops()}')
 
-    image = Image.open('./assets/img/Pubmed.jpg')
+    image = Image.open('./assets/img/PubMed.jpg')
     col2.image(image, caption='Top 10 nodes with the highest degree')
     col2.write("The Pubmed dataset consists of 19717 scientific publications from PubMed database pertaining to diabetes classified into one of three classes. The citation network consists of 44338 links. Each publication in the dataset is described by a TF/IDF weighted word vector from a dictionary which consists of 500 unique words.")
 
