@@ -1,4 +1,3 @@
 torch_geometric
-collections
-matplotlib
-PIL
+collections==0.1.6
+matplotlib==3.5.2
