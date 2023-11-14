@@ -1,6 +1,0 @@
-torch_geometric
-matplotlib==3.5.2
-torch==2.0.1
-seaborn==0.13.0
-numpy==1.22.3
-chardet==5.1.0

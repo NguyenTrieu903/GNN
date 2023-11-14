@@ -1,70 +1,74 @@
-from torch_geometric.nn import SAGEConv
-from utils import accuracy
-import torch.nn.functional as F
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+from torch_geometric.nn import SAGEConv
+import utils
 import numpy as np
-from utils import batches
-np.random.seed(0)
 
 
 class GraphSAGE(torch.nn.Module):
-    """GraphSAGE"""
+    def __init__(self, num_of_feat, f, num_of_label):
+        super(GraphSAGE, self).__init__()
 
-    def __init__(self, dim_in, dim_h, dim_out, learning_rate):
-        super().__init__()
-        self.train_acc_all_gsea = []
-        self.val_acc_all_gsea = []
-        self.learning_rate = learning_rate
-        self.sage1 = SAGEConv(dim_in, dim_h)
-        self.sage2 = SAGEConv(dim_h, dim_out)
-        self.optimizer = torch.optim.Adam(self.parameters(),
-                                          lr=learning_rate,
-                                          weight_decay=5e-4)
+        self.conv1 = SAGEConv(num_of_feat, f)
 
-    def forward(self, x, edge_index):
-        h = self.sage1(x, edge_index)
-        h = torch.relu(h)
-        h = F.dropout(h, p=0.5, training=self.training)
-        h = self.sage2(h, edge_index)
-        return h, F.log_softmax(h, dim=1)
+        self.conv2 = SAGEConv(f, num_of_label)
 
-    def fit(self, data, epochs):
-        criterion = torch.nn.CrossEntropyLoss()
-        optimizer = self.optimizer
-        train_loader = batches(data)
+    def forward(self, data):
+        x = data.x.float()
+        edge_index = data.edge_index
 
-        self.train()
-        for epoch in range(epochs+1):
-            total_loss = 0
-            acc = 0
-            val_loss = 0
-            val_acc = 0
+        x = self.conv1(x=x, edge_index=edge_index)
+        x = F.relu(x)
 
-            # Train on batches
-            for batch in train_loader:
-                optimizer.zero_grad()
-                _, out = self(batch.x, batch.edge_index)
-                loss = criterion(out[batch.train_mask],
-                                 batch.y[batch.train_mask])
-                total_loss += loss
-                acc += accuracy(out[batch.train_mask].argmax(dim=1),
-                                batch.y[batch.train_mask])
+        x = self.conv2(x, edge_index)
+        return x
 
-                loss.backward()
-                optimizer.step()
+    def train_social(self, net, data, epochs, lr):
+        optimizer = torch.optim.Adam(net.parameters(), lr=lr)
+        best_accuracy = 0.0
 
-                # Validation
-                val_loss += criterion(out[batch.val_mask],
-                                      batch.y[batch.val_mask])
-                val_acc += accuracy(out[batch.val_mask].argmax(dim=1),
-                                    batch.y[batch.val_mask])
+        train_losses = []
+        train_accuracies = []
 
-            # Print metrics every 10 epochs
-            if (epoch % 10 == 0):
-                self.train_acc_all_gsea.append(acc/len(train_loader))
-                self.val_acc_all_gsea.append(val_acc/len(train_loader))
-                print(f'Epoch {epoch:>3} | Train Loss: {loss/len(train_loader):.3f} '
-                      f'| Train Acc: {acc/len(train_loader)*100:>6.2f}% | Val Loss: '
-                      f'{val_loss/len(train_loader):.2f} | Val Acc: '
-                      f'{val_acc/len(train_loader)*100:.2f}%')
-        return self.train_acc_all_gsea, self.val_acc_all_gsea
+        val_losses = []
+        val_accuracies = []
+
+        test_losses = []
+        test_accuracies = []
+
+        for ep in range(epochs+1):
+            optimizer.zero_grad()
+            out = net(data)
+            loss = utils.masked_loss(predictions=out,
+                                     labels=data.y,
+                                     mask=data.train_mask)
+            loss.backward()
+            optimizer.step()
+            train_losses += [loss.detach()]
+            train_accuracy = utils.masked_accuracy(predictions=out,
+                                                   labels=data.y,
+                                                   mask=data.train_mask)
+            train_accuracies += [train_accuracy]
+
+            val_loss = utils.masked_loss(predictions=out,
+                                         labels=data.y,
+                                         mask=data.val_mask)
+            val_losses += [val_loss.detach()]
+
+            val_accuracy = utils.masked_accuracy(predictions=out,
+                                                 labels=data.y,
+                                                 mask=data.val_mask)
+            val_accuracies += [val_accuracy]
+
+            test_accuracy = utils.masked_accuracy(predictions=out,
+                                                  labels=data.y,
+                                                  mask=data.test_mask)
+            test_accuracies += [test_accuracy]
+            if np.round(val_accuracy, 4) > np.round(best_accuracy, 4):
+                print("Epoch {}/{}, Train_Loss: {:.4f}, Train_Accuracy: {:.4f}, Val_Accuracy: {:.4f}, Test_Accuracy: {:.4f}"
+                      .format(ep+1, epochs, loss.item(), train_accuracy, val_accuracy,  test_accuracy))
+                best_accuracy = val_accuracy
+
+        return train_accuracies, val_accuracies, test_accuracy
